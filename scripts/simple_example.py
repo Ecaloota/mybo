@@ -53,7 +53,7 @@ stoch_model = OptimisationModel(
     scenario_profile=None,
     node=[battery],
     opt_method="stochastic",
-    scenario_options={"num_scenarios": 10000},
+    scenario_options={"num_scenarios": 100},
     solver_options={"solver": "glpk"},
     model_options=None,
 )

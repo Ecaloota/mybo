@@ -14,9 +14,15 @@ See `scripts/simple_example.py` for example usage.
 6. Solve model subject to stochastic input prices
 7. Solve deterministic model subject to original price forecasts
 
+## Usage
+
+```bash
+pip install -r requirements.txt
+pip install -e .
+```
 
 ## Wishlist
-0. Test existing features (scenario generation and normalisation; charge and discharge direction wrt prices; obvious error possibilities)
+0. Test existing features (scenario generation and normalisation; charge and discharge direction wrt prices; obvious error possibilities; stochastic model)
 1. FCAS participation
 2. Limit throughput
 3. Require the battery to generate 'spread' plans, (single charge / single discharge per day). Is this a good idea?
@@ -26,4 +32,4 @@ See `scripts/simple_example.py` for example usage.
 
 ## Known Issues
 1. There is an off-by-one error in formulation. For example, initialising a battery with
-init_capacity = 10 (kWh) and charge_power = 5 (kW) can sometimes generate a capacity at time t = 0 with 15 kWh (charge_efficiency = 1 also).
+init_capacity = 10 (kWh) and charge_power = 5 (kW) can sometimes generate a capacity at time t = 0 with 15 kWh (charge_efficiency = 1 also).3
