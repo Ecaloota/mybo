@@ -67,36 +67,3 @@ def generate_fake_price_data(
         new.append(i)
 
     return new
-
-
-# Generate data with seed=42 and N=5
-# data = generate_data(2, 6943, 2)
-# data = generate_fake_price_data(
-#     N=5,
-#     seed=100,
-#     num_points=100,
-#     noise_std=0.3,
-#     phase_shift=0.2,
-#     autocorrelation_coefficient=0.98,
-# )
-# combined_data = np.concatenate(data)
-
-# # Plot each set of data
-# fig, axs = plt.subplots(nrows=1, ncols=len(data), figsize=(16, 4))
-# for i in range(len(data)):
-#     axs[i].plot(data[i])
-#     axs[i].set_title(f"Set {i+1}")
-# plt.show()
-
-# Plot all sets of data on the same plot
-# fig, ax = plt.subplots(figsize=(8, 4))
-# for i in range(len(data)):
-#     ax.plot(data[i], label=f"Set {i+1}")
-# ax.legend()
-# plt.show()
-
-# # Plot the concatenated data
-# fig, ax = plt.subplots(figsize=(8, 4))
-# ax.plot(combined_data, label="Concatenated")
-# ax.legend()
-# plt.show()
