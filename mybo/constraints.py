@@ -20,13 +20,22 @@ def capacity_constraint(model: pyo.ConcreteModel) -> None:
         def _change_in_capacity_rule(model: pyo.ConcreteModel, i: int):
             """The capacity at some time i is given by the below expression"""
 
-            return model.charging[i] * model.charge_efficiency + model.discharging[i] * model.discharge_efficiency
+            return (model.charging[i] * model.charge_efficiency + model.discharging[i] * model.discharge_efficiency) * (
+                1 - model.operating_losses
+            )
 
-        prev_capacity = model.initial_capacity if i == 0 else model.capacity[i - 1] * (1 - model.operating_losses)
+        prev_capacity = model.initial_capacity if i == 0 else model.capacity[i - 1]
         return model.capacity[i] == prev_capacity + _change_in_capacity_rule(model, i)
 
-    for i in model.time:
+    def _init_capacity_constraint_rule(model: pyo.ConcreteModel, i: int):
+        """TODO"""
+
+        prev_capacity = model.initial_capacity if i == 0 else model.capacity[i - 1]
+        return model.init_capacity[i] == prev_capacity
+
+    for i in model.scenario_index:
         model.constraints.add(expr=_capacity_constraint_rule(model, i))
+        model.constraints.add(expr=_init_capacity_constraint_rule(model, i))
 
 
 def power_balance_constraint(model: pyo.ConcreteModel) -> None:
@@ -44,7 +53,7 @@ def power_balance_constraint(model: pyo.ConcreteModel) -> None:
 
         return model.charging[i] + model.discharging[i] == model.power[i]
 
-    for i in model.time:
+    for i in model.scenario_index:
         model.constraints.add(expr=_power_balance_constraint_rule(model, i))
 
 
@@ -60,7 +69,7 @@ def exclusive_action_constraint(model: pyo.ConcreteModel):
         return model.discharging[i] >= model.big_m * (model.is_charging[i] - 1)
 
     model.exclusive_action_constraint = pyo.ConstraintList()
-    for i in model.time:
+    for i in model.scenario_index:
         model.exclusive_action_constraint.add(expr=_one_action_constraint_one(model, i))
         model.exclusive_action_constraint.add(expr=_one_action_constraint_two(model, i))
 

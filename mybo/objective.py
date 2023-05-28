@@ -8,7 +8,9 @@ def spot_market_arbitrage_objective(model: pyo.ConcreteModel) -> None:
 
     def _spot_market_arbitrage_rule(model: pyo.ConcreteModel):
         """"""
-        return pyo.quicksum(model.prices[i] * (model.charging[i] + model.discharging[i]) for i in model.time)
+        return pyo.quicksum(
+            model.scenario_prices[i] * (model.charging[i] + model.discharging[i]) for i in model.scenario_index
+        )
 
     # for i in model.time:
     model.objectives.add(expr=_spot_market_arbitrage_rule(model))

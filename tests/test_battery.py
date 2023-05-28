@@ -1,55 +1,58 @@
-# import pyomo.environ as pyo
-# import pytest
+from datetime import datetime, timedelta
 
-# from mybo.battery import Battery
+import pytest
+from helper import generate_datetime_range
 
-
-# @pytest.fixture
-# def battery():
-#     return Battery(
-#         charge_rate=1,
-#         discharge_rate=-1,
-#         max_capacity=10,
-#         min_capacity=0,
-#         charge_efficiency=1,
-#         discharge_efficiency=1,
-#         cycles_per_day=1,
-#         initial_capacity=5,
-#         throughput_cost=0,
-#         operating_losses=0,
-#     )
+from mybo.battery import Battery
+from mybo.constraints import ConstraintScenario
+from mybo.model import OptimisationModel
+from mybo.objective import ObjectiveScenario
 
 
-# @pytest.mark.parametrize("prices", [[-100], [100]])
-# def test_one_state_only(battery: Battery, prices: list[int]) -> None:
-#     """Assert that the battery may only be in one state at some time"""
+@pytest.fixture
+def ideal_battery() -> Battery:
+    return Battery(
+        charge_rate=1,
+        discharge_rate=-1,
+        max_capacity=10,
+        min_capacity=0,
+        charge_efficiency=1,
+        discharge_efficiency=1,
+        cycles_per_day=1,
+        initial_capacity=5,
+        throughput_cost=0,
+        operating_losses=0,
+        constraint_scenario=ConstraintScenario["SimpleConstraints"],
+        objective_scenario=ObjectiveScenario["SimpleSpotMarketRevenue"],
+    )
 
-#     model = pyo.ConcreteModel()
-#     model.time = pyo.RangeSet(0, len(prices) - 1)
 
-#     battery.build_model(model)
+@pytest.fixture
+def one_battery_model(ideal_battery: Battery) -> OptimisationModel:
+    return OptimisationModel(
+        root_profile=None,
+        scenario_profile=None,
+        node=[ideal_battery],
+        index_var="index",
+        opt_method="deterministic",
+        scenario_options=None,
+        solver_options={"solver": "glpk"},
+        model_options=None,
+    )
 
-#     model.prices = pyo.Param(model.time, initialize=prices)
-#     model.objective = pyo.Objective(
-#         rule=sum(model.prices[i] * (model.charging[i] + model.discharging[i]) for i in model.time), sense=pyo.minimize
-#     )
 
-#     solver = pyo.SolverFactory("glpk")
-#     solver.solve(model)
+def test_build_one_battery_model(one_battery_model: OptimisationModel) -> None:
+    """TODO"""
 
-#     # if we provided incentive to charge, ensure we charge
-#     if prices[0] < 0:
-#         assert (
-#             model.action["charge", 0].value == 1.0
-#             and model.action["discharge", 0] != 1.0
-#             and model.action["idle", 0] != 1.0
-#         )
+    # test 5 minute interval with high price, incentivised to discharge
+    start_time = datetime(2023, 1, 1, 0)
+    delta = timedelta(minutes=5)
 
-#     elif prices[0] > 0:
-#         assert (
-#             model.action["charge", 0].value != 1.0
-#             and model.action["discharge", 0] == 0.0
-#             and model.action["idle", 0] != 1.0
-#         )
+    root_index = generate_datetime_range(start_time, start_time, delta)
+    prices = [[1000 for _ in range(len(root_index))]]
 
-#     print("wow")
+    one_battery_model.root_profile = {"index": root_index, "price": prices}
+
+    ef = one_battery_model.solve()
+    soln = ef.get_root_solution()
+    one_battery_model.root_solution_to_dataframe(soln)

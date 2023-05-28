@@ -52,8 +52,9 @@ stoch_model = OptimisationModel(
     root_profile=root,
     scenario_profile=None,
     node=[battery],
+    index_var="time",
     opt_method="stochastic",
-    scenario_options={"num_scenarios": 100},
+    scenario_options={"num_scenarios": 10},
     solver_options={"solver": "glpk"},
     model_options=None,
 )
@@ -78,6 +79,7 @@ det_model = OptimisationModel(
     root_profile=root,
     scenario_profile=None,
     node=[battery],
+    index_var="time",
     opt_method="deterministic",
     scenario_options=None,
     solver_options={"solver": "glpk"},
@@ -85,7 +87,7 @@ det_model = OptimisationModel(
 )
 det_ef = det_model.solve()
 det_soln = det_ef.get_root_solution()
-det_df = stoch_model.root_solution_to_dataframe(det_soln)
+det_df = det_model.root_solution_to_dataframe(det_soln)
 
 det_df["power"] = det_df["charging"] + det_df["discharging"]
 det_df["prices"] = root.get("prices")
@@ -97,9 +99,10 @@ print(f"Deterministic Optimal Revenue = {det_ef.get_objective_value()}")
 
 for df in dfs:
     # Plot the dataframes
-    ax.plot(df["time"], df["power"], "--", label=f"{df.name} - Power", alpha=0.4)
-    ax.plot(df["time"], df["prices"], label=f"{df.name} - Prices")
-    ax.plot(df["time"], df["capacity"], label=f"{df.name} - Capacity")
+    ax.step(df["time"], df["power"], "--", where="post", label=f"{df.name} - Power", alpha=0.4)
+    ax.step(df["time"], df["prices"], where="post", label=f"{df.name} - Prices")
+    # ax.plot(df["time"], df["capacity"], label=f"{df.name} - Capacity")
+    ax.plot(df["time"], df["init_capacity"], label=f"{df.name} - Init Capacity")
 
 ax.legend()
 plt.show()

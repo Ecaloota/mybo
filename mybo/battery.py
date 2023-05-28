@@ -31,19 +31,28 @@ class Battery(BaseModel):
         # TODO assert the model.time index exists
 
         model.power = pyo.Var(
-            model.time, within=pyo.Reals, bounds=(self.discharge_rate, self.charge_rate), initialize=0
+            model.scenario_index, within=pyo.Reals, bounds=(self.discharge_rate, self.charge_rate), initialize=0
         )
-        model.charging = pyo.Var(model.time, within=pyo.NonNegativeReals, bounds=(0.0, self.charge_rate), initialize=0)
+        model.charging = pyo.Var(
+            model.scenario_index, within=pyo.NonNegativeReals, bounds=(0.0, self.charge_rate), initialize=0
+        )
         model.discharging = pyo.Var(
-            model.time, within=pyo.NonPositiveReals, bounds=(self.discharge_rate, 0.0), initialize=0
+            model.scenario_index, within=pyo.NonPositiveReals, bounds=(self.discharge_rate, 0.0), initialize=0
         )
         model.capacity = pyo.Var(
-            model.time,
+            model.scenario_index,
             within=pyo.NonNegativeReals,
             bounds=(self.min_capacity, self.max_capacity),
             initialize=self.initial_capacity,
         )
-        model.is_charging = pyo.Var(model.time, within=pyo.Binary)
+        model.is_charging = pyo.Var(model.scenario_index, within=pyo.Binary)
+
+        model.init_capacity = pyo.Var(
+            model.scenario_index,
+            within=pyo.NonNegativeReals,
+            bounds=(self.min_capacity, self.max_capacity),
+            initialize=self.initial_capacity,
+        )
 
     def _create_params(self, model: pyo.ConcreteModel) -> None:
         """"""

@@ -1,7 +1,7 @@
 import random
 import re
 from collections import defaultdict
-from typing import Any, Optional, Union
+from typing import Any, Optional
 
 import mpisppy.utils.sputils as sputils
 import pandas as pd
@@ -18,9 +18,15 @@ class OptimisationModel(BaseModel):
     and the corresponding scenarios are defined and initialised.
     the model is then solved, and the model defines methods to access the results.
 
+    Note that the root index and root vars are defined only so we have a fixed reference
+    against which perturbation can be performed independently when generating
+    scenarios. When defining objectives and node Vars etc., one should define them
+    against scenario Vars.
+
     profile: input information, contains prices, time index, etc
     node: list of objects in the model
     opt_method: one of ['stochastic', 'deterministic']
+    index_var: optional str, determines which keys in the root profile are used to make optimisation Vars
     scenario_options: determines how scenarios are generated. Only relevant when opt_method is 'stochastic'
     solver_options: determines how the solver is invoked
     model_options: determines how the model is defined. Contains a lot of random info.
@@ -30,6 +36,7 @@ class OptimisationModel(BaseModel):
     scenario_profile: Optional[Any]  # not required
     node: Any
     opt_method: Any
+    index_var: Optional[str]  # must exist as a key in root profile TODO
     scenario_options: Optional[dict]
     solver_options: Optional[dict]
     model_options: Optional[dict]
@@ -46,29 +53,36 @@ class OptimisationModel(BaseModel):
         m.constraints = pyo.ConstraintList()
         m.objectives = pyo.ObjectiveList()
 
-        # don't love this
-        m.root_time = self._get_time_index_from_root_profile()
-        m.root_prices = self._get_spot_prices_from_root_profile(m)
-        m.time = self._get_time_index_from_scenario_profile()
-        m.prices = self._get_spot_prices_from_scenario_profile(m)
+        m.root_index = self._get_index_from_root_profile()
+        m.scenario_index = self._get_index_from_root_profile()  # scenarios will always have the same length as root
+
+        # we build optimisation vars from keys in root profile
+        var_list = [k for k in list(self.root_profile.keys()) if k != self.index_var]
+        for var in var_list:
+            setattr(m, f"root_{var}", self._get_var_from_root_profile(var, m))
+
+            if self.scenario_profile is not None:
+                setattr(m, f"scenario_{var}", self._get_var_from_scenario_profile(var, m))
 
         # build child objects
-        for child in self.node:
-            child.build_model(m)
+        if self.node is not None:
+            for child in self.node:
+                child.build_model(m)
 
         return m
 
-    def _get_time_index_from_scenario_profile(self) -> pyo.RangeSet:
-        return pyo.RangeSet(0, len(self.scenario_profile["time"]) - 1)
+    def _get_index_from_root_profile(self) -> pyo.Set:
+        """The model is defined over a simple 0-indexed set. One can access timedelta
+        information by indexing against this set"""
+        return pyo.RangeSet(0, len(self.root_profile[self.index_var]) - 1)
 
-    def _get_time_index_from_root_profile(self) -> pyo.RangeSet:
-        return pyo.RangeSet(0, len(self.root_profile["time"]) - 1)
+    def _get_var_from_root_profile(self, var: str, model: pyo.ConcreteModel) -> pyo.Param:
+        # TODO error catching
+        return pyo.Param(model.root_index, initialize=self.root_profile.get(var), domain=pyo.Any)
 
-    def _get_spot_prices_from_scenario_profile(self, model: pyo.ConcreteModel) -> pyo.Param:
-        return pyo.Param(model.time, initialize=self.scenario_profile["prices"])
-
-    def _get_spot_prices_from_root_profile(self, model: pyo.ConcreteModel) -> pyo.Param:
-        return pyo.Param(model.root_time, initialize=self.root_profile["prices"])
+    def _get_var_from_scenario_profile(self, var: str, model: pyo.ConcreteModel) -> pyo.Param:
+        # TODO error catching
+        return pyo.Param(model.scenario_index, initialize=self.scenario_profile.get(var), domain=pyo.Any)
 
     def _create_stochastic_scenario(self, scenario_name: str) -> pyo.ConcreteModel:
         """We decompose the optimisation problem into two stages, and tell
@@ -78,7 +92,9 @@ class OptimisationModel(BaseModel):
         self.scenario_profile = self._generate_scenario_profile_from_root()
         model = self.model
         sputils.attach_root_node(
-            model, firstobj=model.objectives, varlist=[model.charging, model.discharging, model.capacity]
+            model,
+            firstobj=model.objectives,
+            varlist=[model.charging, model.discharging, model.capacity, model.init_capacity],
         )
         model._mpisppy_probability = self.scenario_profile.get("scenario_probability")
 
@@ -91,7 +107,9 @@ class OptimisationModel(BaseModel):
         self.scenario_profile = self.root_profile
         model = self.model
         sputils.attach_root_node(
-            model, firstobj=model.objectives, varlist=[model.charging, model.discharging, model.capacity]
+            model,
+            firstobj=model.objectives,
+            varlist=[model.charging, model.discharging, model.capacity, model.init_capacity],
         )
         model._mpisppy_probability = 1.0
         return model
@@ -167,7 +185,7 @@ class OptimisationModel(BaseModel):
         ef.solve_extensive_form()  # this could fail, catch that
         return ef
 
-    def solve(self) -> Union[pyo.ConcreteModel, ExtensiveForm]:
+    def solve(self) -> ExtensiveForm:
         """Passes to the appropriate solver method"""
 
         if self.opt_method == "stochastic":

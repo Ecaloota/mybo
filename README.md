@@ -30,6 +30,8 @@ pip install -e .
 5. Generate unsymmetric confidence distributions from real prices
 
 
-## Known Issues
-1. There is an off-by-one error in formulation. For example, initialising a battery with
-init_capacity = 10 (kWh) and charge_power = 5 (kW) can sometimes generate a capacity at time t = 0 with 15 kWh (charge_efficiency = 1 also).3
+## TODO
+
+1. Can we get the best outcome in the highest number of plausible scenarios (rather than the best outcome for all)? How do we formulate this?
+2. Uniform sampling doesn't consider autocorrelation between prices. This will produce weird scenarios. Can we autocorrelate between scenarios?
+3. We can forecast background load reasonably well (we have good characterisations of uncertainty). Can we use this formulation to solve for stochastic load and solar to analyse different outcomes (i.e. how we choose to charge batteries?)? This is in the context of TOU tariffs, and optimising battery capacity wrt those TOUs and uncertain loads and solar profiles.
