@@ -1,12 +1,14 @@
-from typing import Any
-
 import pyomo.environ as pyo
 from pydantic import BaseModel
+
+from mybo.constraints import ConstraintSet
+from mybo.objective import ObjectiveSet
 
 
 class Battery(BaseModel):
     """Battery TODO"""
 
+    id: str  # unique identifier
     charge_rate: float  # kW
     discharge_rate: float  # kW
     max_capacity: float  # kWh
@@ -16,19 +18,12 @@ class Battery(BaseModel):
     cycles_per_day: float
     initial_capacity: float
     throughput_cost: float
-    operating_losses: float  # intended to be pct < 0
-    constraint_scenario: Any  # TODO fix this?
-    objective_scenario: Any  # TODO fix this annotation?
-
-    @property
-    def name(self):
-        # TODO to disambiguate multiple batteries
-        pass
+    operating_losses: float  # intended to be pct > 0
+    constraints: ConstraintSet
+    objectives: ObjectiveSet
 
     def _create_vars(self, model: pyo.ConcreteModel) -> None:
         """"""
-
-        # TODO assert the model.time index exists
 
         model.power = pyo.Var(
             model.scenario_index, within=pyo.Reals, bounds=(self.discharge_rate, self.charge_rate), initialize=0
@@ -66,14 +61,13 @@ class Battery(BaseModel):
     def _apply_constraints(self, model: pyo.ConcreteModel) -> None:
         """"""
 
-        for constr in self.constraint_scenario.value:
-            constr(model)
+        for i in model.scenario_index:
+            self.constraints.set_constraint(model, i)
 
     def _define_objectives(self, model: pyo.ConcreteModel) -> None:
         """"""
 
-        for obj in self.objective_scenario.value:
-            obj(model)
+        self.objectives.set_objective(model)
 
     def build_model(self, model: pyo.ConcreteModel):
         """"""

@@ -15,3 +15,9 @@ def generate_datetime_range(
         current_date += delta
 
     return date_list
+
+
+def fuzzy_equal(a, b, tol=1e-6) -> bool:
+    """Returns true if abs(a-b) < tol, False otherwise"""
+
+    return abs(a - b) < tol

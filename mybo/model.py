@@ -1,6 +1,8 @@
+import logging
 import random
 import re
 from collections import defaultdict
+from datetime import datetime
 from typing import Any, Optional
 
 import mpisppy.utils.sputils as sputils
@@ -8,6 +10,8 @@ import pandas as pd
 import pyomo.environ as pyo
 from mpisppy.opt.ef import ExtensiveForm
 from pydantic import BaseModel
+
+logger = logging.getLogger(__name__)
 
 
 class OptimisationModel(BaseModel):
@@ -55,6 +59,7 @@ class OptimisationModel(BaseModel):
 
         m.root_index = self._get_index_from_root_profile()
         m.scenario_index = self._get_index_from_root_profile()  # scenarios will always have the same length as root
+        m.duration_map = self._calculate_duration_map(m)
 
         # we build optimisation vars from keys in root profile
         var_list = [k for k in list(self.root_profile.keys()) if k != self.index_var]
@@ -93,7 +98,7 @@ class OptimisationModel(BaseModel):
         model = self.model
         sputils.attach_root_node(
             model,
-            firstobj=model.objectives,
+            firstobj=model.objective,
             varlist=[model.charging, model.discharging, model.capacity, model.init_capacity],
         )
         model._mpisppy_probability = self.scenario_profile.get("scenario_probability")
@@ -108,7 +113,7 @@ class OptimisationModel(BaseModel):
         model = self.model
         sputils.attach_root_node(
             model,
-            firstobj=model.objectives,
+            firstobj=model.objective,
             varlist=[model.charging, model.discharging, model.capacity, model.init_capacity],
         )
         model._mpisppy_probability = 1.0
@@ -123,7 +128,7 @@ class OptimisationModel(BaseModel):
         scenario_profile = {}
 
         ci = self.root_profile.get("confidence_intervals")
-        prices = self.root_profile.get("prices")
+        prices = self.root_profile.get("price")
 
         # generate sampled prices from confidence intervals on root prices
         if ci is not None:
@@ -138,7 +143,7 @@ class OptimisationModel(BaseModel):
 
             scenario_profile = {
                 "time": self.root_profile.get("time"),
-                "prices": sample_prices,
+                "price": sample_prices,
                 "scenario_probability": prob,
             }
 
@@ -185,6 +190,27 @@ class OptimisationModel(BaseModel):
         ef.solve_extensive_form()  # this could fail, catch that
         return ef
 
+    def _calculate_duration_map(self, model: pyo.ConcreteModel, assumed: float = 5) -> list[float]:
+        """Determine or assume the length of simulation intervals from the given
+        root_profile, in minutes. If the index contains one (or zero? TODO) interval(s),
+        we assume its duration, regardless of the type of the elements in the index. If
+        the length of the index is > 1 and its elements are datetimes, we calculate their
+        duration and pad out the resulting list. Otherwise, we just assume a duration
+        map of lengths assumed."""
+
+        idx = self.root_profile[self.index_var]
+
+        if len(idx) <= 1:
+            logger.warning(f"Cannot determine duration_map. Assumed to be {assumed} minutes")
+            durations = [assumed]
+        elif all(isinstance(x, datetime) for x in idx):
+            durations = [(idx[i + 1] - idx[i]).total_seconds() / 60 for i in range(len(idx) - 1)]
+            durations.append(durations[-1])
+        else:
+            durations = [assumed for _ in range(len(idx))]
+
+        return pyo.Param(model.scenario_index, initialize=durations, domain=pyo.Any)
+
     def solve(self) -> ExtensiveForm:
         """Passes to the appropriate solver method"""
 
@@ -209,6 +235,15 @@ class OptimisationModel(BaseModel):
             new_key = matches.groups()[0]
             result[new_key].append(v)
 
-        df = pd.DataFrame(result)
+        if "price" in self.root_profile.keys():
+            result["price"] = self.root_profile.get("price")
+
+        df = pd.DataFrame(result, index=self.root_profile.get(self.index_var))
 
         return df
+
+    def get_node_object_by_id(self, id: str):
+        """TODO"""
+
+        obj = [i for i in self.node if i.id == id]
+        return obj[0] if obj is not None else None

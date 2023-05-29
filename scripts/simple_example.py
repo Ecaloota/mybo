@@ -1,9 +1,12 @@
+from datetime import datetime, timedelta
+
 import matplotlib.pyplot as plt
 
 from mybo.battery import Battery
-from mybo.constraints import ConstraintScenario
+from mybo.constraints import BATTERY_BASE_CONSTRAINTS, ConstraintSet
 from mybo.model import OptimisationModel
-from mybo.objective import ObjectiveScenario
+from mybo.objective import ObjectiveSet
+from mybo.tariff import MarketExportTariff, MarketImportTariff
 
 # from mybo.prices import generate_fake_price_data
 
@@ -16,9 +19,12 @@ from mybo.objective import ObjectiveScenario
 #     autocorrelation_coefficient=0.98,
 # )
 
+base_constraints = []
+
 battery = Battery(
-    charge_rate=10,
-    discharge_rate=-10,
+    id="simple",
+    charge_rate=100,
+    discharge_rate=-100,
     max_capacity=100,
     min_capacity=0,
     charge_efficiency=1,
@@ -27,13 +33,18 @@ battery = Battery(
     initial_capacity=30,
     throughput_cost=0,
     operating_losses=0.0,  # 0.017 == 1.7%
-    constraint_scenario=ConstraintScenario["SimpleConstraints"],
-    objective_scenario=ObjectiveScenario["SimpleSpotMarketRevenue"],
+    constraints=ConstraintSet(constraints=BATTERY_BASE_CONSTRAINTS),
+    objectives=ObjectiveSet(objectives=[MarketImportTariff, MarketExportTariff]),
 )
 
+delta = timedelta(minutes=5)
+start_time = datetime(2023, 1, 1)
+prices = [10, 10, 10, 20, 20, 20, 10, 10, 10, 10]
+times = [start_time + delta * i for i in range(len(prices))]
+
 root = {
-    "prices": [10, 10, 10, 20, 20, 20, 10, 10, 10, 10],
-    "time": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+    "price": prices,
+    "time": times,
     "confidence_intervals": [
         (7, 13),
         (7, 13),
@@ -68,8 +79,8 @@ soln = ef.get_root_solution()
 stochastic_df = stoch_model.root_solution_to_dataframe(soln)
 
 stochastic_df["power"] = stochastic_df["charging"] + stochastic_df["discharging"]
-stochastic_df["prices"] = root.get("prices")
-stochastic_df["time"] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+stochastic_df["price"] = root.get("price")
+stochastic_df["time"] = times
 stochastic_df.name = "stochastic_optimal"
 dfs.append(stochastic_df)
 
@@ -90,8 +101,8 @@ det_soln = det_ef.get_root_solution()
 det_df = det_model.root_solution_to_dataframe(det_soln)
 
 det_df["power"] = det_df["charging"] + det_df["discharging"]
-det_df["prices"] = root.get("prices")
-det_df["time"] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+det_df["price"] = root.get("price")
+det_df["time"] = times
 det_df.name = "det_optimal"
 dfs.append(det_df)
 
@@ -100,7 +111,7 @@ print(f"Deterministic Optimal Revenue = {det_ef.get_objective_value()}")
 for df in dfs:
     # Plot the dataframes
     ax.step(df["time"], df["power"], "--", where="post", label=f"{df.name} - Power", alpha=0.4)
-    ax.step(df["time"], df["prices"], where="post", label=f"{df.name} - Prices")
+    ax.step(df["time"], df["price"], where="post", label=f"{df.name} - Price")
     # ax.plot(df["time"], df["capacity"], label=f"{df.name} - Capacity")
     ax.plot(df["time"], df["init_capacity"], label=f"{df.name} - Init Capacity")
 
